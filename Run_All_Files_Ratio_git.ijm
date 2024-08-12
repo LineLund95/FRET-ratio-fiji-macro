@@ -1,69 +1,19 @@
+setBatchMode(true);
 close("*");
 run("Clear Results");
 
-bg_values = 8;
-bg_values_offset = 1;
+bg_value = 5;	// background value for red and green image. 5 = 5/255 pixel intensity
+ratio = 1;	// A/D ratio value. Standard to separate G4 and dsDNA = 1
+max = 15;	// maximum pixel intensity (15 = 15/255) used to set brightness and contrast to compare different images
 
-main_folder = "../main_folder/"
-results_folder = "../results_folder/"
+main_folder = "subfolder/folder/" 	//paste the main folder containing all folders with individual images. 
+results_folder = "subfolder/folder/"	// paste folder which should contain all image-folders with result images 
 
-// folder names for each sample 
+
+// loop that imports and sorts all loaded images, followed by image analysis
+
 exp_folders = getFileList(main_folder); 
 exp_folders = Array.sort(exp_folders);
-
-
-max_ratio_folder = newArray(exp_folders.length); // array for maximum ratio values for each experiment folder
-max_difference_folder = newArray(exp_folders.length);
-for (j = 0; j < exp_folders.length; j++) {
-	input = main_folder+exp_folders[j];
-	files = getFileList(input);
-	files = Array.sort(files);
-	
-	// loop over files
-	ratio_max = newArray(files.length); // array for all ratio values for an individual experiment folder
-	difference_max = newArray(files.length);
-	for (i = 0; i < files.length; i++) {
-		open(input + files[i]);
-		title = getTitle();
-		index = 4*j+2*i;
-		// processing
-		run("Split Channels");
-		selectWindow(title + " (red)");
-		run("Measure");
-		bg_values_red = getResult("Mean",index);
-		selectWindow(title + " (green)");
-		run("Measure");
-		bg_values_green = getResult("Mean",index+1);
-		bg_value = Array.sort(Array.concat(bg_values_red,bg_values_green));
-		bg_value = bg_values;//bg_value[0];
-		
-		// FRET RATIO and max value
-		run("Ratio Plus", "image1 = ["+ title + " (red)] image2 = ["+ title + " (green)] background1="+ bg_value+bg_values_offset +" clipping_value1="+ bg_value+bg_values_offset +" background2="+ bg_value+bg_values_offset +" clipping_value2="+ bg_value+bg_values_offset +" multiplication=1");
-		selectWindow("Ratio");
-		rename("Ratio_" + title);
-		setMinAndMax(1, 1);
-		run("8-bit");
-		run("Measure");
-		index = 4*j+2*i;
-		ratio_max[i] = getResult("Max", index+2);
-		// FRET DIFFERENCE
-		imageCalculator("Subtract create",  title + " (red)",title + " (green)");
-		selectWindow("Result of " + title + " (red)");
-		rename("Difference_" + title);
-		run("Measure");
-		difference_max[i] = getResult("Max",index+3);
-		close("*");
-	}
-	ratio_max_sort = Array.sort(ratio_max); // sorted max ratio array for individual experiment folder
-	max_ratio_folder[j] = ratio_max_sort[ratio_max_sort.length-1]; // the maximum ratio value for an individual experiment folder
-	difference_max_sort = Array.sort(difference_max);
-	max_difference_folder[j] = difference_max_sort[difference_max_sort.length-1];
-}
-max_raio_folder = Array.sort(max_ratio_folder); // sorted array of the maximum ratios for each experiment folders combined
-max_ratio_value = max_ratio_folder[max_ratio_folder.length-1]; // the overall maximum ratio value for all folders
-max_difference_folder = Array.sort(max_difference_folder);
-max_difference_value = max_difference_folder[max_difference_folder.length-1];
-saveAs("Results", results_folder + "Results.csv");
 
 for (j = 0; j < exp_folders.length; j++) {
 	input = main_folder+exp_folders[j];
@@ -72,7 +22,6 @@ for (j = 0; j < exp_folders.length; j++) {
 	
 	files = getFileList(input);
 	files = Array.sort(files);	
-	//output = substring(input, 0, input.length -1) + "_Results/";
 	File.makeDirectory(output);
 	
 	for (i = 0; i < files.length; i++) {
@@ -81,49 +30,61 @@ for (j = 0; j < exp_folders.length; j++) {
 		open(input + files[i]);
 		title = getTitle();
 		
-		// processing
+		// Make red/green RGB image
 		run("Split Channels");
 		selectWindow(title + " (red)");
-		run("Measure");
-		bg_values_red = getResult("Mean",0);
-		run("Clear Results");
 		selectWindow(title + " (green)");
-		run("Measure");
-		bg_values_green = getResult("Mean",0);
-		bg_value = Array.sort(Array.concat(bg_values_red,bg_values_green));
-		bg_value = bg_values;//bg_value[0];
-		run("Clear Results");
-		
 		run("Merge Channels...", "c1=["+ title +" (red)] c2=["+ title +" (green)] keep");
 		selectWindow("RGB");
 		run("Enhance Contrast", "saturated=0.10");
 			// Save image
-		saveAs("PNG",output + "Merged_" + files[i]);
+			saveAs("PNG",output + "Merged_" + files[i]);
 		
-		// FRET RATIO
-		run("Ratio Plus", "image1 = ["+ title + " (red)] image2 = ["+ title + " (green)] background1="+ bg_value+bg_values_offset +" clipping_value1="+ bg_value+bg_values_offset +" background2="+ bg_value+bg_values_offset +" clipping_value2="+ bg_value+bg_values_offset +" multiplication=1");
-		selectWindow("Ratio");
-		rename("Ratio_" + title);
-		run("Yellow");
-		setMinAndMax(1, 1); // or max = max_ratio_value
-		run("Calibration Bar...", "location=[Upper Right] fill=White label=Black number=5 decimal=0 font=12 zoom=2 overlay");
+		// Measure number of green pixels
+		selectWindow(title + " (green)");
+		run("Duplicate...", " ");
+		selectWindow(title + " (green)-1");
+		rename(title + "(green)-1");
+		setMinAndMax(bg_value, bg_value);
 		run("8-bit");
+		run("Apply LUT");
+		run("Measure");
+		
+		
+		// A/D ratio calculation
+		run("Ratio Plus", "image1 = ["+ title + " (red)] image2 = ["+ title + " (green)] background1="+ bg_value +" clipping_value1="+ bg_value +" background2="+ bg_value +" clipping_value2="+ bg_value +" multiplication=1");
+		selectWindow("Ratio");
+		run("Yellow");
+		setMinAndMax(ratio, ratio);	// sets A/D ratio threshold
+		selectWindow("Ratio");		
+		run("Duplicate...", " ");
+		selectWindow("Ratio-1");
+		setMinAndMax(10000, 1e10);	//finds all "infinity" pixels
+		run("8-bit");
+		run("Apply LUT");
+		selectWindow("Ratio");
+		run("8-bit");
+		run("Apply LUT");
+		imageCalculator("Subtract create", "Ratio","Ratio-1");	//removes all "infinity" pixels
+		selectWindow("Ratio");
+		close();
+		selectImage("Result of Ratio");
+		rename("Ratio_" + title);
+		run("Measure");
 			// Save image
 		saveAs("PNG",output + "Ratio_" + files[i]);
 		
-			// FRET DIFFERENCE
+			// A/D difference calculation
 		imageCalculator("Subtract create",  title + " (red)",title + " (green)");
 		selectWindow("Result of " + title + " (red)");
 		rename("Difference_" + title);
+		run("Measure");
 		run("Yellow");
-		setMinAndMax(0, 15); // or max = max_difference_value
-		run("Calibration Bar...", "location=[Upper Right] fill=White label=Black number=5 decimal=0 font=12 zoom=2 overlay");
-		run("8-bit");
+		setMinAndMax(0, max); //sets contrast/brightness value to compare images
 			// Save image
-		saveAs("PNG",output + "Difference_" + files[i]);
+			saveAs("PNG",output + "Difference_" + files[i]);
 		
 		close("*"); 
 	}
 }
-
-run("Quit");
+saveAs("Results", results_folder + "Results.csv");
