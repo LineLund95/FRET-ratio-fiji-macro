@@ -2,7 +2,7 @@ setBatchMode(true);
 close("*");
 run("Clear Results");
 
-bg_value = 5;	// background value for red and green image. 5 = 5/255 pixel intensity
+bg_value = 5;	// background value and clipping value for red and green image. 5 = 5/255 pixel intensity
 ratio = 1;	// A/D ratio value. Standard to separate G4 and dsDNA = 1
 max = 15;	// maximum pixel intensity (15 = 15/255) used to set brightness and contrast to compare different images
 
@@ -50,30 +50,6 @@ for (j = 0; j < exp_folders.length; j++) {
 		run("Apply LUT");
 		run("Measure");
 		
-		
-		// A/D ratio calculation
-		run("Ratio Plus", "image1 = ["+ title + " (red)] image2 = ["+ title + " (green)] background1="+ bg_value +" clipping_value1="+ bg_value +" background2="+ bg_value +" clipping_value2="+ bg_value +" multiplication=1");
-		selectWindow("Ratio");
-		run("Yellow");
-		setMinAndMax(ratio, ratio);	// sets A/D ratio threshold
-		selectWindow("Ratio");		
-		run("Duplicate...", " ");
-		selectWindow("Ratio-1");
-		setMinAndMax(10000, 1e10);	//finds all "infinity" pixels
-		run("8-bit");
-		run("Apply LUT");
-		selectWindow("Ratio");
-		run("8-bit");
-		run("Apply LUT");
-		imageCalculator("Subtract create", "Ratio","Ratio-1");	//removes all "infinity" pixels
-		selectWindow("Ratio");
-		close();
-		selectImage("Result of Ratio");
-		rename("Ratio_" + title);
-		run("Measure");
-			// Save image
-		saveAs("PNG",output + "Ratio_" + files[i]);
-		
 			// A/D difference calculation
 		imageCalculator("Subtract create",  title + " (red)",title + " (green)");
 		selectWindow("Result of " + title + " (red)");
@@ -83,6 +59,50 @@ for (j = 0; j < exp_folders.length; j++) {
 		setMinAndMax(0, max); //sets contrast/brightness value to compare images
 			// Save image
 			saveAs("PNG",output + "Difference_" + files[i]);
+		
+		// FRET RATIO
+		run("Ratio Plus", "image1 = ["+ title + " (red)] image2 = ["+ title + " (green)] background1="+ bg_value +" clipping_value1="+ bg_value +" background2="+ bg_value +" clipping_value2="+ bg_value +" multiplication=1");
+		selectWindow("Ratio");
+		run("Yellow");
+			
+		// finds infinity pixels due to values divided by zero
+		run("Duplicate...", " ");
+		selectWindow("Ratio-1");
+		setMinAndMax(10000, 1e10);
+		run("8-bit");
+		run("Apply LUT");
+		run("Invert");
+		run("Apply LUT");
+		imageCalculator("Divide create 32-bit", "Ratio-1","Ratio-1"); // this is a 32-bit image with either zero (infinity pixels) or one
+			// removes infinity pixels 
+		imageCalculator("Multiply create 32-bit", "Ratio","Result of Ratio-1");
+			// Find pixels equal to one due to zero/zero calculations below background+clipping value
+		bg_value2 = 0;
+		if (bg_value > 1) {
+		    bg_value2 = bg_value * 2 - 1;}
+		selectWindow(title + " (red)");
+		setThreshold(0, bg_value2, "raw");
+		run("Convert to Mask");
+		selectWindow(title + " (green)");
+		setThreshold(0, bg_value2, "raw");
+		run("Convert to Mask");
+		imageCalculator("AND create 32-bit", ""+ title + " (red)",""+ title + " (green)");
+		selectImage("Result of " + title + " (red)");
+		run("Invert");
+		run("8-bit");
+		run("Apply LUT");
+		imageCalculator("Divide create 32-bit", "Result of " + title + " (red)","Result of " + title + " (red)");
+			// removes pixels equal to one due to zero/zero calculations below background+clipping value
+		imageCalculator("Multiply create 32-bit", "Result of Ratio","Result of Result of " + title + " (red)");
+			// set A/D ratio threshold
+		selectImage("Result of Result of Ratio");
+		rename("Ratio_" + title);
+		setMinAndMax(ratio, ratio); // or max = max_ratio_value
+		run("8-bit");
+		run("Apply LUT");
+		run("Measure");
+			// Save image
+			saveAs("PNG",output + "Ratio_" + files[i]);
 		
 		close("*"); 
 	}
