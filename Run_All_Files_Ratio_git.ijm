@@ -6,9 +6,12 @@ bg_value = 5;	// background value and clipping value for red and green image. 5 
 ratio = 1;	// A/D ratio value. Standard to separate G4 and dsDNA = 1
 max = 15;	// maximum pixel intensity (15 = 15/255) used to set brightness and contrast to compare different images
 
-main_folder = "subfolder/folder/" 	//paste the main folder containing all folders with individual images. 
-results_folder = "subfolder/folder/"	// paste folder which should contain all image-folders with result images 
+// Get the folder where the script is located
+scriptDir = getDirectory("script");
 
+// Define input and output folders relative to the script
+main_folder = scriptDir + "/Test_data/";	 //paste the main folder containing all folders with individual images. 
+results_folder = scriptDir + "/Test_data_results/"; // paste folder which should contain all image-folders with result images 
 
 // loop that imports and sorts all loaded images, followed by image analysis
 
